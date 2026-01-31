@@ -1,4 +1,4 @@
-# OfflineSuite - Comprehensive Tool Guide for LLMs and Search Engines
+# OfflineSuite
 
 ## What is OfflineSuite?
 
