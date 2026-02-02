@@ -1,1 +1,0 @@
-Closed issue #1
