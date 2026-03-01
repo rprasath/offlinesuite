@@ -1,0 +1,40 @@
+# OfflineSuite robots.txt
+# Allow all search engines and LLM crawlers to index the site
+
+User-agent: *
+Allow: /
+
+# Allow OpenAI GPT bot
+User-agent: GPTBot
+Allow: /
+
+# Allow Google Gemini bot
+User-agent: Google-Extended
+Allow: /
+
+# Allow Anthropic Claude bot
+User-agent: anthropic-ai
+Allow: /
+
+# Allow Common Crawl
+User-agent: CCBot
+Allow: /
+
+# Allow other AI/ML bots
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# Sitemap location
+Sitemap: https://offlinesuite.com/sitemap.xml
+
+# Crawl delay (seconds) - be respectful
+Crawl-delay: 1

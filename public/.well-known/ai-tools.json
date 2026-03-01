@@ -1,0 +1,173 @@
+{
+  "application": {
+    "name": "OfflineSuite",
+    "description": "Free offline tools for PDF editing, image processing, and document management. 100% private - all processing happens locally in your browser.",
+    "url": "https://offlinesuite.com",
+    "version": "1.0.0",
+    "author": "OfflineSuite Team"
+  },
+  "features": {
+    "privacy": {
+      "data_upload": false,
+      "data_storage": false,
+      "user_tracking": false,
+      "requires_account": false,
+      "offline_capable": true
+    },
+    "capabilities": {
+      "pdf_editing": true,
+      "image_processing": true,
+      "document_generation": true,
+      "format_conversion": true,
+      "offline_mode": true
+    }
+  },
+  "tools": [
+    {
+      "id": "pdf-merger",
+      "name": "PDF Merger",
+      "category": "pdf",
+      "description": "Combine multiple PDF files into one",
+      "keywords": ["pdf", "merge", "combine", "join"],
+      "url": "/tool/pdf-merger"
+    },
+    {
+      "id": "pdf-compress",
+      "name": "PDF Compressor",
+      "category": "pdf",
+      "description": "Reduce PDF file sizes",
+      "keywords": ["pdf", "compress", "optimize", "reduce"],
+      "url": "/tool/pdf-compress"
+    },
+    {
+      "id": "pdf-editor",
+      "name": "PDF Editor",
+      "category": "pdf",
+      "description": "Edit PDF documents",
+      "keywords": ["pdf", "edit", "modify", "split", "rotate"],
+      "url": "/tool/pdf-editor"
+    },
+    {
+      "id": "pdf-watermark",
+      "name": "PDF Watermark",
+      "category": "pdf",
+      "description": "Add watermarks to PDFs",
+      "keywords": ["pdf", "watermark", "stamp", "brand"],
+      "url": "/tool/pdf-watermark"
+    },
+    {
+      "id": "pdf-sign",
+      "name": "PDF Signer",
+      "category": "pdf",
+      "description": "Add digital signatures to PDFs",
+      "keywords": ["pdf", "sign", "signature", "digital"],
+      "url": "/tool/pdf-sign"
+    },
+    {
+      "id": "pdf-to-images",
+      "name": "PDF to Images",
+      "category": "converter",
+      "description": "Convert PDF pages to images",
+      "keywords": ["pdf", "image", "convert", "png", "jpg"],
+      "url": "/tool/pdf-to-images"
+    },
+    {
+      "id": "pdf-metadata",
+      "name": "PDF Metadata Editor",
+      "category": "pdf",
+      "description": "Edit PDF properties and metadata",
+      "keywords": ["pdf", "metadata", "properties", "info"],
+      "url": "/tool/pdf-metadata"
+    },
+    {
+      "id": "pdf-diff",
+      "name": "PDF Diff Tool",
+      "category": "utility",
+      "description": "Compare two PDF files",
+      "keywords": ["pdf", "diff", "compare", "difference"],
+      "url": "/tool/pdf-diff"
+    },
+    {
+      "id": "passport-photo",
+      "name": "Passport Photo Maker",
+      "category": "image",
+      "description": "Create passport and visa photos",
+      "keywords": ["passport", "photo", "visa", "id", "biometric"],
+      "url": "/tool/passport-photo"
+    },
+    {
+      "id": "background-remover",
+      "name": "Background Remover",
+      "category": "image",
+      "description": "Remove backgrounds from images",
+      "keywords": ["background", "remove", "transparent", "cutout"],
+      "url": "/tool/background-remover"
+    },
+    {
+      "id": "image-compressor",
+      "name": "Image Compressor",
+      "category": "image",
+      "description": "Reduce image file sizes",
+      "keywords": ["image", "compress", "optimize", "reduce"],
+      "url": "/tool/image-compressor"
+    },
+    {
+      "id": "image-converter",
+      "name": "Image Converter",
+      "category": "converter",
+      "description": "Convert between image formats",
+      "keywords": ["image", "convert", "format", "jpg", "png"],
+      "url": "/tool/image-converter"
+    },
+    {
+      "id": "image-editor",
+      "name": "Image Editor",
+      "category": "image",
+      "description": "Edit images with filters and adjustments",
+      "keywords": ["image", "edit", "filter", "photo", "adjust"],
+      "url": "/tool/image-editor"
+    },
+    {
+      "id": "qr-generator",
+      "name": "QR Code Generator",
+      "category": "utility",
+      "description": "Create QR codes",
+      "keywords": ["qr", "code", "generator", "barcode"],
+      "url": "/tool/qr-generator"
+    },
+    {
+      "id": "invoice-generator",
+      "name": "Invoice Generator",
+      "category": "document",
+      "description": "Create professional invoices",
+      "keywords": ["invoice", "bill", "receipt", "payment"],
+      "url": "/tool/invoice-generator"
+    },
+    {
+      "id": "signature-maker",
+      "name": "Signature Maker",
+      "category": "image",
+      "description": "Extract signatures from photos",
+      "keywords": ["signature", "extract", "transparent", "sign"],
+      "url": "/tool/signature-maker"
+    },
+    {
+      "id": "text-diff",
+      "name": "Text Diff Tool",
+      "category": "utility",
+      "description": "Compare text files",
+      "keywords": ["text", "diff", "compare", "difference"],
+      "url": "/tool/text-diff"
+    }
+  ],
+  "technology": {
+    "framework": "React",
+    "build_tool": "Vite",
+    "styling": "Tailwind CSS",
+    "processing": "Client-side JavaScript"
+  },
+  "support": {
+    "github": "https://github.com/rprasath/offlinesuite",
+    "issues": "https://github.com/rprasath/offlinesuite/issues"
+  }
+}
