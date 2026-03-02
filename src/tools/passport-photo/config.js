@@ -271,6 +271,14 @@ export const specsData = {
       widthIn: 4,
       heightIn: 6,
     },
+    '4x6-center-2': {
+      label: '4×6 inches (2 centered, cut-friendly)',
+      widthIn: 4,
+      heightIn: 6,
+      layout: 'center-two',
+      cutGapMm: 6,
+      borderPx: 3,
+    },
     '5x7': {
       label: '5×7 inches',
       widthIn: 5,
@@ -345,6 +353,10 @@ function processPrintSizes(printSizes) {
       label: spec.label,
       widthPx: inchToPx(spec.widthIn),
       heightPx: inchToPx(spec.heightIn),
+      layout: spec.layout || 'grid',
+      cutGapPx: spec.cutGapMm ? mmToPx(spec.cutGapMm) : 0,
+      cutGapMm: spec.cutGapMm || 0,
+      borderPx: spec.borderPx || 0,
     }
   }
 

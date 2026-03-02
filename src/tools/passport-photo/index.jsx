@@ -26,7 +26,8 @@ const getInitialState = () => ({
   exposure: 100,
   saturation: 100,
   cropParams: null,
-  printSize: '',
+  includeSinglePhoto: true,
+  printSizes: [],
   docType: 'us-passport',
   removeBackground: false,
   originalImg: null,
@@ -50,8 +51,10 @@ export default function PassportPhoto() {
   const cropFrameRef = useRef(null)
   const imageLayerRef = useRef(null)
   const previewCanvasRef = useRef(null)
+  const previewCanvasRefs = useRef({})
   const fileInputRef = useRef(null)
   const docDropdownRef = useRef(null)
+  const previousStepRef = useRef(1)
   
   // Use ref to track current state for event handlers
   const stateRef = useRef(state)
@@ -300,6 +303,7 @@ export default function PassportPhoto() {
         isDragging: false,
       }))
     } else if (e.touches.length === 1) {
+      e.preventDefault()
       const touch = e.touches[0]
       setState(prev => ({
         ...prev,
@@ -337,6 +341,8 @@ export default function PassportPhoto() {
 
       setState(prev => ({ ...prev, lastTouchDistance: distance }))
     } else if (e.touches.length === 1 && stateRef.current.isDragging) {
+      e.preventDefault()
+      e.stopPropagation()
       const touch = e.touches[0]
       const { dragStartX, dragStartY, startOffsetX, startOffsetY } = stateRef.current
       const dx = touch.clientX - dragStartX
@@ -373,9 +379,17 @@ export default function PassportPhoto() {
     setDocSearch('')
   }
 
-  // Handle print size change
-  const handlePrintSizeChange = (e) => {
-    setState(prev => ({ ...prev, printSize: e.target.value }))
+  // Handle print size toggle (multi-select)
+  const handlePrintSizeToggle = (printSizeKey) => {
+    setState(prev => {
+      const isSelected = prev.printSizes.includes(printSizeKey)
+      return {
+        ...prev,
+        printSizes: isSelected
+          ? prev.printSizes.filter(size => size !== printSizeKey)
+          : [...prev.printSizes, printSizeKey],
+      }
+    })
   }
 
   // Handle adjustment changes
@@ -512,26 +526,34 @@ export default function PassportPhoto() {
     }
   }
 
+  const getPreviewTargets = useCallback(() => {
+    const targets = [...state.printSizes]
+    if (state.includeSinglePhoto || targets.length === 0) {
+      targets.unshift('single')
+    }
+    return targets
+  }, [state.includeSinglePhoto, state.printSizes])
+
   // Render export canvas
-  const renderExportCanvas = useCallback(() => {
-    if (!previewCanvasRef.current || !state.cropParams || !state.img) return
+  const renderExportCanvas = useCallback((canvas, printSizeKey = 'single') => {
+    if (!canvas || !state.cropParams || !state.img) return
 
     const docSize = getCurrentDocSize()
-    const ctx = previewCanvasRef.current.getContext('2d')
+    const ctx = canvas.getContext('2d')
+    const selectedPrintSize = printSizeKey !== 'single' ? PRINT_SIZES[printSizeKey] : null
     
     let canvasWidth, canvasHeight
     
-    if (state.printSize && PRINT_SIZES[state.printSize]) {
-      const printSize = PRINT_SIZES[state.printSize]
-      canvasWidth = printSize.widthPx
-      canvasHeight = printSize.heightPx
+    if (selectedPrintSize) {
+      canvasWidth = selectedPrintSize.widthPx
+      canvasHeight = selectedPrintSize.heightPx
     } else {
       canvasWidth = docSize.widthPx
       canvasHeight = docSize.heightPx
     }
 
-    previewCanvasRef.current.width = canvasWidth
-    previewCanvasRef.current.height = canvasHeight
+    canvas.width = canvasWidth
+    canvas.height = canvasHeight
 
     const { sx, sy, sw, sh } = state.cropParams
 
@@ -541,23 +563,85 @@ export default function PassportPhoto() {
 
     ctx.filter = getFilterString()
 
-    if (state.printSize && PRINT_SIZES[state.printSize]) {
+    if (selectedPrintSize) {
       const photoWidth = docSize.widthPx
       const photoHeight = docSize.heightPx
 
-      const cols = Math.floor(canvasWidth / photoWidth)
-      const rows = Math.floor(canvasHeight / photoHeight)
+      if (selectedPrintSize.layout === 'center-two') {
+        const cutGap = selectedPrintSize.cutGapPx || 0
+        const borderPx = selectedPrintSize.borderPx || 0
 
-      const totalGridWidth = cols * photoWidth
-      const totalGridHeight = rows * photoHeight
-      const offsetX = (canvasWidth - totalGridWidth) / 2
-      const offsetY = (canvasHeight - totalGridHeight) / 2
+        const canFitHorizontal = (2 * photoWidth + cutGap) <= canvasWidth && photoHeight <= canvasHeight
+        const canFitVertical = photoWidth <= canvasWidth && (2 * photoHeight + cutGap) <= canvasHeight
 
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const x = offsetX + col * photoWidth
-          const y = offsetY + row * photoHeight
-          ctx.drawImage(state.img, sx, sy, sw, sh, x, y, photoWidth, photoHeight)
+        const placements = []
+
+        if (canFitHorizontal) {
+          const totalWidth = 2 * photoWidth + cutGap
+          const startX = (canvasWidth - totalWidth) / 2
+          const y = (canvasHeight - photoHeight) / 2
+          placements.push(
+            { x: startX, y },
+            { x: startX + photoWidth + cutGap, y }
+          )
+        } else if (canFitVertical) {
+          const totalHeight = 2 * photoHeight + cutGap
+          const x = (canvasWidth - photoWidth) / 2
+          const startY = (canvasHeight - totalHeight) / 2
+          placements.push(
+            { x, y: startY },
+            { x, y: startY + photoHeight + cutGap }
+          )
+        }
+
+        if (placements.length === 2) {
+          placements.forEach(({ x, y }) => {
+            ctx.drawImage(state.img, sx, sy, sw, sh, x, y, photoWidth, photoHeight)
+          })
+
+          if (borderPx > 0) {
+            ctx.filter = 'none'
+            ctx.strokeStyle = 'rgba(120, 120, 120, 0.45)'
+            ctx.lineWidth = borderPx
+            ctx.setLineDash([2, 3])
+            placements.forEach(({ x, y }) => {
+              const inset = borderPx / 2
+              ctx.strokeRect(x + inset, y + inset, photoWidth - borderPx, photoHeight - borderPx)
+            })
+            ctx.setLineDash([])
+          }
+        } else {
+          const cols = Math.floor(canvasWidth / photoWidth)
+          const rows = Math.floor(canvasHeight / photoHeight)
+
+          const totalGridWidth = cols * photoWidth
+          const totalGridHeight = rows * photoHeight
+          const offsetX = (canvasWidth - totalGridWidth) / 2
+          const offsetY = (canvasHeight - totalGridHeight) / 2
+
+          for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+              const x = offsetX + col * photoWidth
+              const y = offsetY + row * photoHeight
+              ctx.drawImage(state.img, sx, sy, sw, sh, x, y, photoWidth, photoHeight)
+            }
+          }
+        }
+      } else {
+        const cols = Math.floor(canvasWidth / photoWidth)
+        const rows = Math.floor(canvasHeight / photoHeight)
+
+        const totalGridWidth = cols * photoWidth
+        const totalGridHeight = rows * photoHeight
+        const offsetX = (canvasWidth - totalGridWidth) / 2
+        const offsetY = (canvasHeight - totalGridHeight) / 2
+
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            const x = offsetX + col * photoWidth
+            const y = offsetY + row * photoHeight
+            ctx.drawImage(state.img, sx, sy, sw, sh, x, y, photoWidth, photoHeight)
+          }
         }
       }
     } else {
@@ -565,24 +649,35 @@ export default function PassportPhoto() {
     }
 
     ctx.filter = 'none'
-  }, [state.cropParams, state.img, state.printSize, state.bgColor, getCurrentDocSize, getFilterString])
+  }, [state.cropParams, state.img, state.bgColor, getCurrentDocSize, getFilterString])
 
-  // Handle export
-  const handleExport = () => {
-    if (!previewCanvasRef.current) return
+  const renderAllPreviews = useCallback(() => {
+    const targets = getPreviewTargets()
+    targets.forEach((target) => {
+      const canvas = target === 'single'
+        ? previewCanvasRef.current
+        : previewCanvasRefs.current[target]
+      renderExportCanvas(canvas, target)
+    })
+  }, [getPreviewTargets, renderExportCanvas])
 
-    renderExportCanvas()
-
+  const downloadTarget = useCallback((target, timestamp) => {
     const quality = 0.95
-    const dataUrl = previewCanvasRef.current.toDataURL('image/jpeg', quality)
     const { label } = getCurrentDocSize()
+    const canvas = target === 'single'
+      ? previewCanvasRef.current
+      : previewCanvasRefs.current[target]
+    if (!canvas) return
+
+    renderExportCanvas(canvas, target)
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
 
     let filename
-    if (state.printSize && PRINT_SIZES[state.printSize]) {
-      const printLabel = PRINT_SIZES[state.printSize].label
-      filename = `${label.toLowerCase().replace(/\s+/g, '-')}-${printLabel.toLowerCase().replace(/\s+/g, '-')}-sheet-${Date.now()}.jpg`
+    if (target !== 'single' && PRINT_SIZES[target]) {
+      const printLabel = PRINT_SIZES[target].label
+      filename = `${label.toLowerCase().replace(/\s+/g, '-')}-${printLabel.toLowerCase().replace(/\s+/g, '-')}-sheet-${timestamp}.jpg`
     } else {
-      filename = `${label.toLowerCase().replace(/\s+/g, '-')}-photo-${Date.now()}.jpg`
+      filename = `${label.toLowerCase().replace(/\s+/g, '-')}-photo-${timestamp}.jpg`
     }
 
     const link = document.createElement('a')
@@ -591,6 +686,17 @@ export default function PassportPhoto() {
     document.body.appendChild(link)
     link.click()
     link.remove()
+  }, [getCurrentDocSize, renderExportCanvas])
+
+  // Handle export
+  const handleExport = () => {
+    const targets = getPreviewTargets()
+    const timestamp = Date.now()
+    targets.forEach((target) => downloadTarget(target, timestamp))
+  }
+
+  const handleExportSingle = () => {
+    downloadTarget('single', Date.now())
   }
 
   // Navigation
@@ -612,18 +718,28 @@ export default function PassportPhoto() {
         updateCropFrame()
         // Small delay to ensure crop frame has been positioned
         setTimeout(() => {
-          fitImageInitially()
+          // Keep prior crop/zoom when returning from preview (step 3 -> step 2)
+          if (previousStepRef.current === 3) {
+            setState(prev => clampOffsets(prev))
+            setIsReady(true)
+          } else {
+            fitImageInitially()
+          }
         }, 50)
       })
       return () => cancelAnimationFrame(timer)
     }
-  }, [state.currentStep, state.imgLoaded, state.docType, updateCropFrame, fitImageInitially])
+  }, [state.currentStep, state.imgLoaded, state.docType, updateCropFrame, fitImageInitially, clampOffsets])
+
+  useEffect(() => {
+    previousStepRef.current = state.currentStep
+  }, [state.currentStep])
 
   useEffect(() => {
     if (state.currentStep === 3 && state.cropParams) {
-      renderExportCanvas()
+      renderAllPreviews()
     }
-  }, [state.currentStep, state.cropParams, renderExportCanvas])
+  }, [state.currentStep, state.cropParams, renderAllPreviews])
 
   useEffect(() => {
     window.addEventListener('mousemove', handleMouseMove)
@@ -660,6 +776,26 @@ export default function PassportPhoto() {
     }
   }, [handleWheel])
 
+  // Prevent browser pinch-to-zoom on Safari/iOS inside crop area
+  useEffect(() => {
+    const container = cropContainerRef.current
+    if (!container) return
+
+    const preventGestureZoom = (e) => {
+      e.preventDefault()
+    }
+
+    container.addEventListener('gesturestart', preventGestureZoom)
+    container.addEventListener('gesturechange', preventGestureZoom)
+    container.addEventListener('gestureend', preventGestureZoom)
+
+    return () => {
+      container.removeEventListener('gesturestart', preventGestureZoom)
+      container.removeEventListener('gesturechange', preventGestureZoom)
+      container.removeEventListener('gestureend', preventGestureZoom)
+    }
+  }, [])
+
   // Get size info
   const getSizeInfo = () => {
     const { widthPx, heightPx, widthMm, heightMm } = getCurrentDocSize()
@@ -675,13 +811,28 @@ export default function PassportPhoto() {
 
   // Get print size info
   const getPrintSizeInfo = () => {
-    if (!state.printSize) return 'Select a print size to tile multiple photos'
-    const printSize = PRINT_SIZES[state.printSize]
+    if (!state.includeSinglePhoto && !state.printSizes.length) {
+      return 'Select at least one output option.'
+    }
     const docSize = getCurrentDocSize()
-    const cols = Math.floor(printSize.widthPx / docSize.widthPx)
-    const rows = Math.floor(printSize.heightPx / docSize.heightPx)
-    const totalPhotos = cols * rows
-    return `Will create ${cols}×${rows} grid (${totalPhotos} photos) on ${printSize.label} sheet`
+    const outputSummaries = []
+
+    if (state.includeSinglePhoto) {
+      outputSummaries.push('Single photo enabled')
+    }
+
+    const sheetSummaries = state.printSizes.map((key) => {
+      const printSize = PRINT_SIZES[key]
+      if (!printSize) return null
+      if (printSize.layout === 'center-two') {
+        return `${printSize.label}: 2 centered photos, ${printSize.cutGapMm}mm cut gap, bordered`
+      }
+      const cols = Math.floor(printSize.widthPx / docSize.widthPx)
+      const rows = Math.floor(printSize.heightPx / docSize.heightPx)
+      const totalPhotos = cols * rows
+      return `${printSize.label}: ${cols}×${rows} (${totalPhotos} photos)`
+    }).filter(Boolean)
+    return [...outputSummaries, ...sheetSummaries].join(' | ')
   }
 
   // Build document groups for searchable dropdown
@@ -821,7 +972,7 @@ export default function PassportPhoto() {
                 className={`relative bg-gray-900 rounded-lg overflow-hidden h-[300px] sm:h-[400px] select-none touch-none ${state.isDragging ? 'grabbing' : 'cursor-grab'}`}
                 onMouseDown={handleMouseDown}
                 onTouchStart={handleTouchStart}
-                style={{ touchAction: 'none' }}
+                style={{ touchAction: 'none', overscrollBehavior: 'contain' }}
               >
                 {/* Loading indicator */}
                 {state.img && !isReady && (
@@ -859,11 +1010,34 @@ export default function PassportPhoto() {
               </div>
 
               <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 text-center">
-                💡 Drag to move • Scroll or pinch to zoom • Center face inside the oval guide
+                Drag to position • Pinch/scroll or buttons to zoom • Keep face centered in oval guide
               </p>
 
               {/* Zoom Control */}
               <div className="mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => applyZoom(state.scale * 0.9, null, null)}
+                    className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                    type="button"
+                  >
+                    Zoom -
+                  </button>
+                  <button
+                    onClick={() => applyZoom(state.scale * 1.1, null, null)}
+                    className="px-3 py-1.5 text-sm bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500"
+                    type="button"
+                  >
+                    Zoom +
+                  </button>
+                  <button
+                    onClick={fitImageInitially}
+                    className="ml-auto px-3 py-1.5 text-sm bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-200 rounded-md hover:bg-primary-100 dark:hover:bg-primary-900/50"
+                    type="button"
+                  >
+                    Reset Position
+                  </button>
+                </div>
                 <label className="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300 mb-1">
                   <span>Zoom</span>
                   <strong>{Math.round(state.scale * 100)}%</strong>
@@ -989,20 +1163,39 @@ export default function PassportPhoto() {
               </div>
 
               <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg transition-colors">
-                <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Print Size (Optional)</h3>
-                <select
-                  value={state.printSize}
-                  onChange={handlePrintSizeChange}
-                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 transition-colors"
-                >
-                  <option value="">Single Photo (Document Size)</option>
-                  <optgroup label="Standard Print Sizes">
-                    {Object.entries(PRINT_SIZES).map(([key, size]) => (
-                      <option key={key} value={key}>{size.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-                <p className={`text-xs mt-2 ${state.printSize ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-3">Print Sizes (Optional, Multi-Select)</h3>
+                <label className="flex items-center gap-3 p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={state.includeSinglePhoto}
+                    onChange={(e) => setState(prev => ({ ...prev, includeSinglePhoto: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 bg-white dark:bg-gray-800"
+                  />
+                  <span className="text-sm text-gray-800 dark:text-gray-100">Single Photo (Document Size)</span>
+                  <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200">
+                    Default
+                  </span>
+                </label>
+                <div className="space-y-2">
+                  {Object.entries(PRINT_SIZES).map(([key, size]) => {
+                    const checked = state.printSizes.includes(key)
+                    return (
+                      <label
+                        key={key}
+                        className="flex items-center gap-3 p-2 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handlePrintSizeToggle(key)}
+                          className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 bg-white dark:bg-gray-800"
+                        />
+                        <span className="text-sm text-gray-800 dark:text-gray-100">{size.label}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className={`text-xs mt-2 ${state.printSizes.length ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
                   {getPrintSizeInfo()}
                 </p>
               </div>
@@ -1061,16 +1254,41 @@ export default function PassportPhoto() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
             <div className="text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">✓ Final Preview</p>
-              <div className="inline-block p-4 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors">
-                <canvas
-                  ref={previewCanvasRef}
-                  className="max-w-full h-auto rounded shadow-lg"
-                  style={{ maxHeight: '400px' }}
-                />
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">✓ Final Preview(s)</p>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                {getPreviewTargets().map((target) => (
+                  <div key={target} className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-200">
+                        {target === 'single' ? 'Single Photo' : `Sheet: ${PRINT_SIZES[target]?.label || target}`}
+                      </p>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {target === 'single'
+                          ? `${getCurrentDocSize().widthPx}×${getCurrentDocSize().heightPx}px`
+                          : `${PRINT_SIZES[target]?.widthPx || 0}×${PRINT_SIZES[target]?.heightPx || 0}px`}
+                      </p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-md p-2 overflow-auto max-h-[320px]">
+                      <canvas
+                        ref={(el) => {
+                          if (target === 'single') {
+                            previewCanvasRef.current = el
+                          } else if (el) {
+                            previewCanvasRefs.current[target] = el
+                          }
+                        }}
+                        className="max-w-full h-auto rounded shadow mx-auto"
+                        style={{ maxHeight: '280px' }}
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
+                      {target === 'single' ? 'Use for digital upload or individual print.' : 'Print-ready tiled layout.'}
+                    </p>
+                  </div>
+                ))}
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                Your {getCurrentDocSize().label} photo is ready!
+                Your {getCurrentDocSize().label} output is ready.
               </p>
             </div>
 
@@ -1081,12 +1299,20 @@ export default function PassportPhoto() {
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{getSizeInfo().print}</p>
                 
-                <button
-                  onClick={handleExport}
-                  className="w-full px-6 py-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors text-lg flex items-center justify-center gap-2"
-                >
-                  <span>💾</span> Download Photo
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={handleExportSingle}
+                    className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>📷</span> Download Single Photo
+                  </button>
+                  <button
+                    onClick={handleExport}
+                    className="w-full px-6 py-4 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors text-lg flex items-center justify-center gap-2"
+                  >
+                    <span>💾</span> Download All Selected
+                  </button>
+                </div>
                 
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-4 text-center">
                   📌 All processing happens locally. Your photo never leaves your device.
